@@ -49,4 +49,4 @@ LDLIBS_/binder-fuzzer-$(LKL_HOST_CONFIG_MMU) += $(LIBPROTOBUF_MUTATOR_LIBS)
 
 # VFS fuzzer
 progs-y += vfsfuzz
-# fuzzers-y += fuzzers/vfs/vfs-fuzzer
+fuzzers-y += fuzzers/vfs/vfsfuzz

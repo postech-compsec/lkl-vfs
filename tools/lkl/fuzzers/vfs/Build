@@ -1,0 +1,3 @@
+vfsfuzz-y += vfsfuzz.o
+CFLAGS_vfsfuzz.o += -O0
+
