@@ -44,6 +44,8 @@ int LLVMFuzzerInitialize(int *argc, char ***argv)
 {
   long ret;
 
+  printf("--- prep disk ---\n");
+
   disk.fd = open("images/ext4.img", O_RDWR);
   if (disk.fd < 0) {
     fprintf(stderr, "could not open image: %s\n", strerror(errno));
@@ -65,7 +67,8 @@ int LLVMFuzzerInitialize(int *argc, char ***argv)
   disk_id = ret;
   printf("added disk id: %u\n", disk_id);
 
-  ret = lkl_start_kernel("mem=1024M kasan.fault=panic loglevel=8");
+  printf("--- boot ---\n");
+  ret = lkl_start_kernel("mem=1024M kasan.fault=report loglevel=8");
   if (ret < 0) {
     fprintf(stderr, "lkl_start_kernel failed: %s\n", lkl_strerror(ret));
     lkl_cleanup();
@@ -82,6 +85,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
 {
   unsigned int ret;
 
+  printf("--- mount ---\n");
   ret = lkl_mount_dev(disk_id, 0, "ext4", 0, NULL, mpoint, sizeof(mpoint));
   if (ret) {
     fprintf(stderr, "can't mount disk: %d %s\n", ret, lkl_strerror(ret));
@@ -97,9 +101,57 @@ int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
     return -1;
   }
 
+  /* XXX: disk needs to be remounted as read-only for clean unmount */
+  char dev_str[] = { "/dev/xxxxxxxx" };
+  snprintf(dev_str, sizeof(dev_str), "/dev/%08x", disk_id);
+  printf("dev_str: %s\n", dev_str);
+  for (;;) {
+    ret = lkl_sys_mount(dev_str, mpoint, "ext4", LKL_MS_RDONLY|LKL_MS_REMOUNT, NULL);
+    if (ret == 0)
+      break;
+    if (ret == -EBUSY) {
+      struct __lkl__kernel_timespec ts = {
+        .tv_sec = 1,
+        .tv_nsec = 0,
+      };
+      lkl_sys_nanosleep(&ts, NULL);
+      continue;
+    } else if (ret < 0) {
+      fprintf(stderr, "cannot remount mount disk read-only: %s\n", lkl_strerror(ret));
+      break;
+    }
+  }
+
   ret = lkl_umount_dev(disk_id, 0, 0, 1000);
   if (ret < 0) {
     fprintf(stderr, "umount failed: %s\n", lkl_strerror(ret));
+  } else {
+    printf("unmounted %d\n", disk_id);
   }
+
+/*
+ *   ret = lkl_sys_unlink("/mnt/0000fe00");
+ *   if (ret < 0) {
+ *     fprintf(stderr, "error unlinking mnt_str: %s\n", lkl_strerror(ret));
+ *   } else {
+ *     fprintf(stderr, "unlinked mnt_str\n");
+ *   }
+ * 
+ *   ret = lkl_sys_unlink("/dev/0000fe00");
+ *   if (ret < 0) {
+ *     fprintf(stderr, "error unlinking dev_str: %s\n", lkl_strerror(ret));
+ *   } else {
+ *     fprintf(stderr, "unlinked dev_str\n");
+ *   }
+ */
+
+  printf("--- clean ---\n");
+
+  /* lkl_sys_halt(); */
+  /* lkl_cleanup(); */
+  /* lkl_disk_remove(disk); */
+  /* close(disk.fd); */
+
+  printf("--- done ---\n");
 
 }
