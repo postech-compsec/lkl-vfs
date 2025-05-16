@@ -255,6 +255,20 @@ define define_libprotobuf_mutator
           Refer to documentation at tools/lkl/fuzzers/binder/README.md)))
 endef
 
+define do_autoconf_vfsfuzz
+  # export KCONFIG := fuzzing_defconfig
+  $(call set_kernel_config,CONFIG_KCOV,y)
+  $(eval kasan := yes)
+  $(call set_autoconf_var,MMU,y)
+  $(call set_kernel_config,MMU,y)
+  # Explicitly set LKL MMU configuration parameters for Kconfig
+  $(call set_autoconf_var,LKL_MEMORY_START,0x50000000)
+  $(call set_kernel_config,LKL_MEMORY_START,0x50000000)
+  $(call set_autoconf_var,LKL_TASK_UNMAPPED_BASE,0x100000)
+  $(call set_kernel_config,LKL_TASK_UNMAPPED_BASE,0x100000)
+  $(call kasan_enable)
+endef
+
 define do_autoconf_fuzzing
   export KCONFIG := fuzzing_defconfig
   export LLVM := 1
@@ -291,6 +305,7 @@ define do_autoconf_mmu
 endef
 
 define do_autoconf
+  $(if $(VFS_FUZZ),$(call do_autoconf_vfsfuzz))
   $(if $(LKL_FUZZING),$(call do_autoconf_fuzzing))
   $(if $(LLVM),$(call do_autoconf_llvm),$(call do_autoconf_gnu))
   $(eval EXEC_FMT := $(shell echo $(LD_FMT) | cut -d "-" -f1))
