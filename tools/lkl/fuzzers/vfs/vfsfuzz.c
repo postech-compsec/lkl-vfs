@@ -17,12 +17,32 @@
 #include <lkl.h>
 #include <lkl_host.h>
 
-int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
+void __llvm_profile_initialize_file(void);
+int __llvm_profile_write_file(void);
+
+static char mpoint[32];
+static unsigned int disk_id;
+static struct lkl_disk disk;
+
+
+void flush_coverage(void)
+{
+  printf("Flushing coverage data...\n");
+  __llvm_profile_write_file();
+  printf("Done...\n");
+}
+
+void cleanup(void) {
+  flush_coverage();
+  lkl_sys_halt();
+  lkl_cleanup();
+  lkl_disk_remove(disk);
+  close(disk.fd);
+}
+
+int LLVMFuzzerInitialize(int *argc, char ***argv)
 {
   long ret;
-  struct lkl_disk disk;
-  unsigned int disk_id;
-  char mpoint[32];
 
   disk.fd = open("images/ext4.img", O_RDWR);
   if (disk.fd < 0) {
@@ -45,7 +65,6 @@ int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
   disk_id = ret;
   printf("added disk id: %u\n", disk_id);
 
-  printf("starting kernel\n");
   ret = lkl_start_kernel("mem=1024M kasan.fault=panic loglevel=8");
   if (ret < 0) {
     fprintf(stderr, "lkl_start_kernel failed: %s\n", lkl_strerror(ret));
@@ -53,9 +72,19 @@ int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
     return -1;
   }
 
+  __llvm_profile_initialize_file();
+  atexit(cleanup);
+
+  return 0;
+}
+
+int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
+{
+  unsigned int ret;
+
   ret = lkl_mount_dev(disk_id, 0, "ext4", 0, NULL, mpoint, sizeof(mpoint));
   if (ret) {
-    fprintf(stderr, "can't mount disk: %s\n", lkl_strerror(ret));
+    fprintf(stderr, "can't mount disk: %d %s\n", ret, lkl_strerror(ret));
     return -1;
   }
 
@@ -73,8 +102,4 @@ int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
     fprintf(stderr, "umount failed: %s\n", lkl_strerror(ret));
   }
 
-  lkl_disk_remove(disk);
-  lkl_sys_halt();
-  lkl_cleanup();
-  close(disk.fd);
 }
