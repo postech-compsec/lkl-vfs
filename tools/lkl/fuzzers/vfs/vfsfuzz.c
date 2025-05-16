@@ -85,6 +85,13 @@ int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
 {
   unsigned int ret;
 
+  ret = lkl_sys_unlink("/mnt/0000fe00");
+  if (ret < 0) {
+    fprintf(stderr, "error unlinking mnt_str: %s\n", lkl_strerror(ret));
+  } else {
+    fprintf(stderr, "unlinked mnt_str\n");
+  }
+
   printf("--- mount ---\n");
   ret = lkl_mount_dev(disk_id, 0, "ext4", 0, NULL, mpoint, sizeof(mpoint));
   if (ret) {
@@ -100,6 +107,9 @@ int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
         lkl_strerror(ret));
     return -1;
   }
+
+  /* run syscalls here */
+
 
   /* XXX: disk needs to be remounted as read-only for clean unmount */
   char dev_str[] = { "/dev/xxxxxxxx" };
@@ -129,28 +139,40 @@ int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
     printf("unmounted %d\n", disk_id);
   }
 
-/*
- *   ret = lkl_sys_unlink("/mnt/0000fe00");
- *   if (ret < 0) {
- *     fprintf(stderr, "error unlinking mnt_str: %s\n", lkl_strerror(ret));
- *   } else {
- *     fprintf(stderr, "unlinked mnt_str\n");
- *   }
- * 
- *   ret = lkl_sys_unlink("/dev/0000fe00");
- *   if (ret < 0) {
- *     fprintf(stderr, "error unlinking dev_str: %s\n", lkl_strerror(ret));
- *   } else {
- *     fprintf(stderr, "unlinked dev_str\n");
- *   }
- */
+  ret = lkl_sys_chdir("/");
+  if (ret) {
+    fprintf(stderr, "can't chdir to /: %s\n", lkl_strerror(ret));
+    return -1;
+  }
 
-  printf("--- clean ---\n");
+  ret = lkl_sys_unlink("/mnt/0000fe00");
+  if (ret < 0) {
+    fprintf(stderr, "error unlinking mnt_str: %s\n", lkl_strerror(ret));
+  } else {
+    fprintf(stderr, "unlinked mnt_str\n");
+  }
 
-  /* lkl_sys_halt(); */
-  /* lkl_cleanup(); */
-  /* lkl_disk_remove(disk); */
-  /* close(disk.fd); */
+  ret = lkl_sys_unlink("/dev/0000fe00");
+  if (ret < 0) {
+    fprintf(stderr, "error unlinking internal dev_str: %s\n", lkl_strerror(ret));
+  } else {
+    fprintf(stderr, "unlinked internal dev_str\n");
+  }
+
+  ret = lkl_sys_unlink(dev_str);
+  if (ret < 0) {
+    fprintf(stderr, "error unlinking dev_str: %s\n", lkl_strerror(ret));
+  } else {
+    fprintf(stderr, "unlinked dev_str\n");
+  }
+
+  /*
+   * printf("--- clean ---\n");
+   * lkl_sys_halt();
+   * lkl_cleanup();
+   * lkl_disk_remove(disk);
+   * close(disk.fd);
+   */
 
   printf("--- done ---\n");
 
